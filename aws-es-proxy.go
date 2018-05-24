@@ -52,15 +52,17 @@ type proxy struct {
 	fileRequest  *os.File
 	fileResponse *os.File
 	credentials  *credentials.Credentials
+	httpClient   *http.Client
 }
 
 func newProxy(args ...interface{}) *proxy {
 	return &proxy{
-		endpoint:  args[0].(string),
-		verbose:   args[1].(bool),
-		prettify:  args[2].(bool),
-		logtofile: args[3].(bool),
-		nosignreq: args[4].(bool),
+		endpoint:   args[0].(string),
+		verbose:    args[1].(bool),
+		prettify:   args[2].(bool),
+		logtofile:  args[3].(bool),
+		nosignreq:  args[4].(bool),
+		httpClient: &http.Client{Timeout: time.Duration(args[5].(int)) * time.Second},
 	}
 }
 
@@ -149,7 +151,7 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		signer.Sign(req, payload, p.service, p.region, time.Now())
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		log.Fatalln(err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -292,6 +294,7 @@ func main() {
 		prettify      bool
 		logtofile     bool
 		nosignreq     bool
+		timeout       int
 		endpoint      string
 		listenAddress string
 		fileRequest   *os.File
@@ -305,6 +308,7 @@ func main() {
 	flag.BoolVar(&logtofile, "log-to-file", false, "Log user requests and ElasticSearch responses to files")
 	flag.BoolVar(&prettify, "pretty", false, "Prettify verbose and file output")
 	flag.BoolVar(&nosignreq, "no-sign-reqs", false, "Disable AWS Signature v4")
+	flag.IntVar(&timeout, "timeout", 30, "Set the request timeout in seconds")
 	flag.Parse()
 
 	if len(os.Args) < 3 {
@@ -319,6 +323,7 @@ func main() {
 		prettify,
 		logtofile,
 		nosignreq,
+		timeout,
 	)
 
 	if err = p.parseEndpoint(); err != nil {
